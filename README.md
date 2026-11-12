@@ -48,6 +48,40 @@ Imaging supports image resizing using various resampling filters. The most notab
 
 The full list of supported filters:  NearestNeighbor, Box, Linear, Hermite, MitchellNetravali, CatmullRom, BSpline, Gaussian, Lanczos, Hann, Hamming, Blackman, Bartlett, Welch, Cosine. Custom filters can be created using ResampleFilter struct.
 
+**Linear-light resampling (optional)**
+
+By default the resampling convolution is applied directly to sRGB-encoded
+pixel values. Averaging encoded values is not physically correct and shows up
+as dark edges around transparency and an overall dark shift when downscaling
+high-contrast images. Two optional filter modifiers switch the convolution to
+linear-light space and/or explicit premultiplied alpha. They wrap any
+existing filter and work with `Resize`, `Fit`, `Fill` and `Thumbnail`:
+
+```go
+// Resample in linear-light space (avoids darkening of high-contrast images).
+filter := imaging.LinearLight(imaging.Lanczos)
+dstImage := imaging.Resize(srcImage, 800, 600, filter)
+
+// Linear light + premultiplied alpha: also avoids dark/colored fringes
+// along transparency edges. Recommended for images with an alpha channel.
+filter = imaging.LinearLight(imaging.PremultipliedAlpha(imaging.Lanczos))
+dstImage = imaging.Resize(srcImage, 800, 600, filter)
+```
+
+- `LinearLight(filter)` converts pixels to linear light (sRGB transfer
+  function, lookup-table based) before the convolution and converts the
+  result back to sRGB afterwards.
+- `PremultipliedAlpha(filter)` premultiplies color channels by alpha before
+  the convolution and unpremultiplies afterwards, so (semi-)transparent
+  pixels do not leak their color into opaque areas. It is meant to be
+  combined with `LinearLight`; used alone it is equivalent to the default
+  path, which already performs alpha-weighted accumulation in sRGB space.
+
+The options have no effect with the `NearestNeighbor` filter (no convolution
+is performed). Without these options the output is byte-for-byte identical to
+previous versions. The runtime overhead of the linear-light path is small
+(see `go test -bench Resize` and NOTES.md for measurements and trade-offs).
+
 **Resampling filters comparison**
 
 Original image:

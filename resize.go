@@ -92,6 +92,23 @@ func Resize(img image.Image, width, height int, filter ResampleFilter) *image.NR
 		return resizeNearest(img, dstW, dstH)
 	}
 
+	if filter.linearLight {
+		// Linear-light resampling (see LinearLight). PremultipliedAlpha
+		// without LinearLight is equivalent to the default path, which
+		// already performs alpha-weighted accumulation, and falls through
+		// to it.
+		if srcW != dstW && srcH != dstH {
+			return resizeVerticalLinear(resizeHorizontalLinear(img, dstW, filter), dstH, filter)
+		}
+		if srcW != dstW {
+			return resizeHorizontalLinear(img, dstW, filter)
+		}
+		if srcH != dstH {
+			return resizeVerticalLinear(img, dstH, filter)
+		}
+		return Clone(img)
+	}
+
 	if srcW != dstW && srcH != dstH {
 		return resizeVertical(resizeHorizontal(img, dstW, filter), dstH, filter)
 	}
@@ -369,6 +386,12 @@ func Thumbnail(img image.Image, width, height int, filter ResampleFilter) *image
 type ResampleFilter struct {
 	Support float64
 	Kernel  func(float64) float64
+
+	// Optional processing modes, set by the LinearLight and PremultipliedAlpha
+	// option functions. Unexported so that the zero value (the default
+	// sRGB-space resampling) keeps its exact historical behavior.
+	linearLight       bool
+	premultiplyAlpha  bool
 }
 
 // NearestNeighbor is a nearest-neighbor filter (no anti-aliasing).
